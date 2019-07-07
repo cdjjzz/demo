@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: eurekaserver
+server:
+  port: 18000
+
+###配置服务注册中心
+eureka:
+  instance:
+    instance-id: ${spring.application.name}:${server.port}
+    hostname: springboot
+  client:
+    ##下面两个默认配置为true
+    fetch-registry: true
+    register-with-eureka: true
+    service-url:
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka

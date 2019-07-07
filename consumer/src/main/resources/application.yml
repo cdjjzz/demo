@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: regitsserver
+server:
+  port: 20000
+eureka:
+  client:
+    service-url:
+      defaultZone: http://springboot:18000/eureka
+  instance:
+    instance-id: ${spring.application.name}:${server.port}
