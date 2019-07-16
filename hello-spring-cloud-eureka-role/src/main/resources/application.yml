@@ -1,0 +1,14 @@
+server:
+  port: 16005
+spring:
+  application:
+    name: hello-spring-cloud-eureka-role
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eurekaserver2:16001/eureka/,http://eurekaserver1:16000/eureka/,http://eurekaserver3:16002/eureka/
+  server:
+    a-s-g-cache-expiry-timeout-ms: 100
+    a-s-g-update-interval-ms: 1000
+    a-w-s-access-id: ssdsdasdjkasdjasdh
+    remote-region-trust-store-password: admin
