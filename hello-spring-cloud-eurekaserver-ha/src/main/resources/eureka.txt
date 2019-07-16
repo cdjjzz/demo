@@ -1,0 +1,176 @@
+    # eureka 何时开启自我保护 总结
+    #expectedNumberOfRenewsPerMin ：每分钟最大的续约数量，
+    #由于客户端是每30秒续约一次，一分钟就是续约2次， count代表的是客户端数量?
+    #所以这个变量的计算公式 ： 客户端数量*2
+    #?
+    #numberOfRenewsPerMinThreshold ： 每分钟最小续约数量，
+    #使用expectedNumberOfRenewsPerMin * serverConfig.getRenewalPercentThreshold()。
+    # Eureka Server 每60秒会自动清理一下过期的客户端，
+    # 在清理之前会判断一下 是否需要自我保护，每次都会判断。
+    #Eureka的自我保护机制，都是围绕这两个变量来实现的， 如果每分钟的续约数量小于numberOfRenewsPerMinThreshold ， 就会开启自动保护机制。
+    #在此期间，不会再主动剔除任何一个客户端。
+    #1 当服务的网络分区解除之后，客户端能够和服务进行交互时，在续约的时候，更新每分钟的续约数，当每分钟的续约数大于 2.重启服务
+
+
+    #Eureeka 集群同步，如何保证最终一致性
+    #Eureka Server 允许同一时刻被任意Eureka Client做写入操作，
+    #当发生客户端向Eureka Server 1发起注册时，明明在Eureka Server注册成功了，但是返回结果的时候，发生网络错误，误让Eureka Client 认为server 1不可用,正好这个时候Eureka Client的状态发生变更（会去修改laseDirtyTimestamp）
+    #进而像server 2发起注册， 这个时候问题就来了。
+    #
+    #server1 和 server2 上面的实例状态不一致。
+    #
+    #但是由于Eureka Server服务有如下机制，可以确保集群状态下数据的最终一致性；
+    #
+    #1.当向server 2 注册之后， server 2 会同时向server 1 同步client端的注册信息，server 1由于之前被client注册过，同时也向server 2同步注册信息 ， 这就造成了，两个Eureka Server互相同步请求的问题， 这个时候就是 通过 lastDirtyTimestamp这个变量来判定以谁的为准， 谁的lastDirtyTimestamp 大，则以谁的为准。
+    #
+    #2.单单通过lastDirtyTimestamp 这个机制，并没有办法保证集群之间的数据一致性，当网络出现异常的之后，集群同步请求一直不成功，同时任务的过期时间已经到了（集群同步是通过发布任务，让多线程批量去处理的，同时任务有过期时间），这个时候会造成集群之间的数据不一致的情况，
+    #这个时候，就是通过heatbeat机制， 当心跳发生如下三种情况的是，客户端会重新发起注册：
+    #
+    #当客户端的lastDirtyTimestamp> 大于服务端的instance的lastDirtyTimestamp时候，会认为服务端的信息是无效的，因此无法续约，需要重新发起注册请求。
+    #
+    #服务端的注册信息不存在
+    #
+    #服务端的instance的status = UNKONW， 为什么会出现UNKONW这个状态呢，因为在deleteStatusOverride
+    #
+    #的时候存在传入UNKONW的可能性。
+    #
+    #通过以上机制，保证了在网络异常的情况下，Eureka Server能够在网络恢复后，达到最终一致性。
+    #---------------------
+
+    ##eureka server 过期处理时间
+    #Eureka Server端实例过期，会同步到其他server服务器吗？
+    #实例过期不会同步到集群中其他服务器，每个Eureka Server 内部都有自己的过期定时任务，每个server
+    #自己负责清理自己的，互不相干，会触发同步操作的是如下几个操作，
+    #register 注册
+    #renew 心跳续约
+    #cancle 客户端主动下线
+    #stateUpdate 添加覆盖状态
+    #deleteStateovrride 删除覆盖状态
+
+
+    ##eureeka clinet z注册问题
+    #1 启动通过spring-boot自动装配EurekaAutoServiceRegistration 注册实例
+    #2 client 主要应用于启动之后，当应用的信息发生改变之后，每40每秒执行一次的线程，检测到了，也会自动去注册一次。
+
+
+    #Eureka Server集群宕机后，客户端是否可用？
+    #情景一
+    #Eureka Client 启动的时候，会主动去全量获取一次注册信息，如果这个时候Eureka Server集群
+    #已经宕机，那么Eureka Client端是不可用的。
+    #情景二
+    #如果Eureka Client 启动时全量获取注册信息成功，在之后的运行过程当中，Eureka Server集群宕机了
+    #那么这个时候，Eureka Client是不受影响的，Eureka Client会缓存注册信息在本地，如果后续增量获取
+    #注册信息失败，也不会影响本地现有的注册信息。 唯一影响的是，由于Eureka Client所拥有的数据
+    #得不到更新，这个时候，新增客户端，或者有客户端的信息发生变化，那么Eureka Client是感知不到的。
+
+
+    #关键的时间间隔说明
+    #Eureka Client：
+    #更新本地注册信息(本地缓存，其他client) 默认：30秒
+    #发送心跳(检查是否可用) 默认：30秒
+    #检查应用信息，如果发生变化，则重新发起注册 默认：30秒
+
+    #Eureka Server：
+    #只读缓存过期时间 默认：30秒
+    #读写缓存过期时间 默认：180秒
+    #清理过期的任务 默认：60秒
+    #租约过期时间 默认：90秒
+    #启动时同步节点数据，为空等待时间 默认：30秒
+    #清空每分钟续约次数 默认：60秒
+
+    #Eureka Client 90秒没有心跳一定会过期吗？
+    #答案是，不一定会过期
+    #情景一
+    #自我保护模式的开启
+    #情景二
+    #Eureka Server中租约过期时间默认是90秒，服务端维护了一个lastUpdaeTimestap这个变量，
+    #用来表示最后修改时间，至于为什么90秒不一定会过期，看下代码即可：
+    #但是由于在续约的时候，更新lastUpdateTimestap是这样的：加上90秒 即180秒才算过期
+
+    #Eureka在应用启动时，会在EurekaAutoServiceRegistration这个类初始化的时候，主动去Eureka Server端注册。
+    #Eureka在启动完成之后会启动一个40秒执行一次的定时任务，该任务会去监测自身的 IP信息以及自身的配置信息是否发生改变，如果发生改变，则会重新发起注册，观察lastDirtyTimestamp
+    #续约返回404状态码时，会去重新注册
+
+
+     ### 实例注册配置项  Eureka 作为注册项还是client都需要配置
+        #####eureka.instance EurekaInstanceConfigBean
+
+        ####eureka.server eureka 作为服务才需要的配置
+
+        ####eureka.client eureka 作为客户端才需要的配置，从服务中注册服务
+
+
+        ####
+        #
+        #服务提供者会定时向Eureka Server发送心跳，默认30s
+        #Eureka Server收到心跳后，会更新对应的服务实例信息，如果服务的状态有变化则将实例的变化加入到”
+        #最近租约变更记录队列”中
+        #Eureka Server有个实例过期清理定时器，如果在指定时间内没有收到心跳(默认90s)，则认为服务已经下线，
+        #会从读写缓存中移除此实例，将并此变化更新“最近租约变更记录队列”。
+        #通常建议将存活的最长时间设置为3个心跳
+        #服务消费者也有个定时任务会定时去更新服务实例信息（默认30s），
+        #第一次全量拉取服务实例，会读取所有的实例信息;
+        #之后使用增量拉取服务实例信息，Eureka Server根据”最近租约变更记录队列”，
+        #告诉请求方哪些服务实例有变化，只返回变化的实例信息。客户端根据返回的增量信息更新本地缓存。
+        #我们也可以禁用增量获取服务实例实例，每次使用全量获取服务实例信息
+        ## EurekaClientConfig，重在 Eureka-Client，例如， 连接的 Eureka-Server 的地址、获取服务提供者列表的频率、注册自身为服务提供者的频率等等
+
+
+          ### 服务发现相关的配置
+          ## 是否从 Eureka-Server 拉取服务实例注册信息，默认值为true
+          #eureka.client.fetch-registry: true
+          ## 从 Eureka-Server 拉取注册服务实例信息频率，默认：30 秒
+          #eureka.client.registry-fetch-interval-seconds: 30
+          #
+          ## 是否禁用增量获取服务实例注册信息
+          #eureka.disableDelta: false
+          ## EurekaInstanceConfig，重在服务实例，例如，等等。此处应用指的是，Application Consumer 和 Application Provider。
+          ## 服务实例配置
+          ## 心跳，租约续约频率，单位：秒
+          #eureka.instance.lease-renewal-interval-in-seconds: 30
+          ##  eureka server多久没有收到心跳，则表示对应的实例过期，单位：秒。
+          #eureka.instance.lease-expiration-duration-in-seconds: : 90s
+          ## Eureka Server端服务实例租约过期定时任务执行频率
+          #eureka.server.eviction-interval-timer-in-ms: 60s
+
+
+        # 是否开启只读请求响应缓存。响应缓存 ( ResponseCache ) 机制目前使用两层缓存策略。优先读取只读缓存，读取不到后读取固定过期的读写缓存。
+        #eureka.server.use-read-only-response-cache: true
+        # 只读缓存更新频率，单位：毫秒。只读缓存定时更新任务只更新读取过请求 ，因此虽然永不过期，也会存在读取不到的情况。
+        #eureka.server.response-cache-update-interval-ms: 30s
+        #getResponseCacheAutoExpirationInSeconds() ：读写缓存写入后过期时间，单位：秒。
+        #eureka.server.response-cache-auto-expiration-in-seconds: 180s
+        # 移除队列里过期的租约变更记录的定时任务执行频率，单位：毫秒。默认值 ：30 * 1000 毫秒。
+        #eureka.server.delta-retention-timer-interval-in-ms: 30s
+        # 租约变更记录过期时长，单位：毫秒。默认值 ： 3 * 60 * 1000 毫秒。
+        #eureka.server.retention-time-in-m-s-in-delta-queue: 180s
+
+
+
+        # 配置在Eureka Server端的配置文件
+        #是否开启自我保护模式。
+        #eureka.server.enable-self-preservation: false
+        #开启自我保护模式比例，超过该比例后开启自我保护模式。
+        #eureka.server.renewal-percent-threshold: 0.85
+        #自我保护模式比例更新定时任务执行频率。
+        #eureka.server.renewal-threshold-update-interval-ms: 900s
+
+
+        #== Eureka-Server 集群同步相关
+        # Eureka-Server 启动时，从远程 Eureka-Server 读取不到注册信息时，多长时间不允许 Eureka-Client 访问。
+        #eureka.server.wait-time-in-ms-when-sync-empty:5分钟
+        #Eureka-Server 集群节点更新频率，单位：毫秒。
+        #eureka.server.peer-eureka-nodes-update-interval-ms:
+        # 初始化实例信息到Eureka服务端的间隔时间，单位为秒
+        #eureka.client.initial-instance-info-replication-interval-seconds: 40
+        # 更新实例信息的变化到Eureka服务端的间隔时间，单位为秒
+        #eureka.client.instance-info-replication-interval-seconds: 30
+
+
+        #为了保证集群里所有Eureka Server节点的状态同步，所有以下操作都会同步到集群的所有服务上：服务注册（Registers）、服务注册（Registers）、服务更新（Renewals）、服务取消（Cancels）,服务超时（Expirations）和服务状态变更（Status Changes）。以下是一些部分重要
+
+        #syncUp：在Eureka Server重启或新的Eureka Server节点加进来的，会执行初始化，从而能够正常提供服务。当Eureka server启动时，他会从其它节点获取所有的注册信息。如果获取同步失败，它在一定时间（此值由决定）内拒绝服务。
+        #replicateToPeers： 复印所有的eureka操作到集群中其他节点，请求再次转发到其它的Eureka Server，调用同样的接口，传入同样的参数，除了会在header中标记isReplication=true，从而避免重复的replicate
+        #register: 注册登录的实例，并且复印此实例的信息到所有的eureka server的节点。如果其它Eureka server调用此节点，只在本节点更新实例信息，避免通知其他节点执行更新
+        #renew：心跳
+        #cancel

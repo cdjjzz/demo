@@ -1,9 +1,9 @@
+spring:
+  application:
+    name: hello-spring-cloud-ribbon
+server:
+  port: 16007
 eureka:
   client:
     service-url:
       defaultZone: http://eurekaserver2:16001/eureka/,http://eurekaserver1:16000/eureka/,http://eurekaserver3:16002/eureka/
-spring:
-  application:
-    name: hello-spring-cloud-eureka-member
-server:
-  port: 16003
