@@ -6,4 +6,4 @@ spring:
   application:
     name: hello-spring-cloud-eureka-member
 server:
-  port: 16004
+  port: 16003

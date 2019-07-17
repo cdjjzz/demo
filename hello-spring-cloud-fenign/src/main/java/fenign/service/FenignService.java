@@ -10,6 +10,10 @@ import java.util.Map;
  * @author admin
  * @version 1.0.0
  */
+
+/**
+ * 定义feign 客户端
+ */
 @FeignClient("hello-spring-cloud-eureka-member")
 public interface FenignService {
 

@@ -1,0 +1,74 @@
+FeignClientsRegistrar : feign客户端注册器
+
+FeignClientsRegistrar实现了接口 ImportBeanDefinitionRegistrar。
+而ImportBeanDefinitionRegistrar的设计目的，就是被某个实现类实现，
+配合@Configuration注解的配置类，在配置类被处理时，用于额外注册一部分bean定义:
+---
+
+#registerDefaultConfiguration方法用于注册一个feign客户端配置bean,
+可以用于注册针对所有feign客户端的缺省配置的注册，也可以用于针对每个feign客户端的专有配置的注册。
+
+针对所有feign客户端的缺省配置的bean名称类似于 : default.xxx.TestApplication.
+FeignClientSpecification，
+针对某个名称为test-service的feign客户端的配置的bean名称类似于:
+test-service.FeignClientSpecification。
+
+
+从上面的代码分析可知，FeignClientsRegistrar的主要作用如下 :
+注册缺省feign客户端配置bean定义；
+对于每个@FeignClient注解的feign客户端定义 :
+注册一个针对该feign客户端的配置bean定义；
+注册该feign客户端bean定义,生成bean采用工厂类FeignClientFactoryBean;
+而且，上述功能实现在FeignClientsRegistrar实现的接口
+ImportBeanDefinitionRegistrar所定义的方法registerBeanDefinitions中。
+而该方法会在应用的@EnableFeignClients注解被处理时被调用执行。具体的执行时调用栈如下所示：
+
+
+从上面的分析可以看出，当我们使用注解@EnableFeignClients 时，
+相当于启用了feign客户端定义的扫描和注册机制，
+从而可以发现开发人员通过注解@FeignClient定义的feign客户端，
+并最终作为bean定义注册到容器中。而通过@Autowired自动装配注解，
+这些feign客户端会以ReflectiveFeign$FeignInvocationHandler动态代理的形式被注入到使用方。
+该feign客户端包含了对每个接口方法的处理器MethodHandler,接口缺省方法对应DefaultMethodHandler,
+服务功能端点方法对应SynchronousMethodHandler
+
+
+执行顺序：
+1）首先会先执行下面一行代码，获取负载均衡的重试配置，然后进行负载均衡，选取实例。
+2）再执行上面一行代码，获取执行单个服务的重试配置，最后再执行具体的业务逻辑。
+
+3）FeignClient 和 Ribbon重试区别与联系：
+
+疑问：一个http请求，如果feign和ribbon都配置了重试机制，异常情况下一共会请求多少次？
+经过上面的分析，请求总次数 n 为feignClient和ribbon配置参数的笛卡尔积：
+n(请求总次数)=feign(默认5次) * (MaxAutoRetries+1) * (MaxAutoRetriesNextServer+1)
+注意：+1是代表ribbon本身默认的请求。
+
+其实二者的重试机制相互独立，并无联系。但是因为用了feign肯定会用到ribbon，
+所以feign的重试机制相对来说比较鸡肋，自己feignClient的时候一般会关闭该功能。
+ribbon的重试机制默认配置为0，也就是默认是去除重试机制的，建议不要修改。
+如果配置不当，会因为幂等请求带来数据问题。所以建议关闭二者的重试功能。
+如果开启的话，建议合理配置Hystrix的超时时间，在一些没必要的重试请求执行时，
+根据Hystrix的超时时间，快速失败，结束重试。
+
+
+feign其实不是做负载均衡的,负载均衡是ribbon的功能,feign只是集成了ribbon而已,但是负载均衡的功能还是feign内置的ribbon再做,而不是feign。
+feign的作用的替代RestTemplate,性能比较低，但是可以使代码可读性很强。
+
+ribbon的负载均衡策略，默认的常见有随机规则,轮询规则,权重规则
+随机不用说，轮询也不用说，权重意思是,请求时间越久的server,其被分配给客户端使用的可能性就越低。
+ribbon也可以自定义策略。具体方法包括：
+方法1.实现IRule接口
+方法2.集成AbstractLoadBalancerRule 、PredicateBasedRule。
+
+只要在配置中自动注入自定义的策略bean就可以
+Java code
+@Bean
+  public IRule ribbonRule() {
+    // 负载均衡规则，改为随机
+    return new RandomRule();
+  }
+
+，当然你也可能会向使用配置的方式而非代码方式。
+但是记住，配置方式优先级要大于代码方式。
+
