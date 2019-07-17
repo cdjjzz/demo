@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: hello-spring-cloud-fengin
+eureka:
+  client:
+    service-url:
+       defaultZone: http://eurekaserver2:16001/eureka/,http://eurekaserver1:16000/eureka/,http://eurekaserver3:16002/eureka/
+server:
+  port: 16008
