@@ -1,0 +1,100 @@
+1.验证与安全保障: 识别面向各类资源的验证要求并拒绝那些与要求不符的请求。
+2.审查与监控: 在边缘位置追踪有意义数据及统计结果，从而为我们带来准确的生产状态结论。
+3.动态路由: 以动态方式根据需要将请求路由至不同后端集群处。
+4.压力测试: 逐渐增加指向集群的负载流量，从而计算性能水平。
+5.负载分配: 为每一种负载类型分配对应容量，并弃用超出限定值的请求。
+6.静态响应处理: 在边缘位置直接建立部分响应，从而避免其流入内部集群。
+7.多区域弹性: 跨越AWS区域进行请求路由，旨在实现ELB使用多样化并保证边缘位置与使用者尽可能接近。
+
+
+pre: 这种过滤器在请求被路由之前调用。可利用这种过滤器实现身份验证、在集群中选择请求的微服务，记录调试信息等。
+routing: 这种过滤器将请求路由到微服务。这种过滤器用于构建发送给微服务的请求，并使用apache httpclient或netflix ribbon请求微服务。
+post: 这种过滤器在路由到微服务以后执行。这种过滤器可用来为响应添加标准的http header、收集统计信息和指标、将响应从微服务发送给客户端等。
+error: 在其他阶段发送错误时执行该过滤器。
+
+
+Zuul是默认继承了负载均衡和熔断的，负载均衡无需任何操作，
+Greenwich版本的Hystrix需要添加@Bean配置路径才可以访问/hystrix.stream
+
+
+当@EnableZuulProxy与Spring Boot Actuator配合使用时，
+Zuul会暴露一个路由管理端点/actuator/routes（低版本为/routes端点）。
+借助这个端点，可以方便、直观地查看以及管理Zuul的路由。
+/actuator/routes端点的使用非常简单，使用GET方法访问端点，
+即可以返回Zuul当时映射的路由列表；使用POST方式访问该端点就会强制刷新Zuul当时映射的路由列表
+（尽管路由会自动刷新，Spring Cloud依然提供了强制立即刷新的方式）。
+由于spring-cloud-starter-netflix-zuul已经包含了spring-boot-starter-actuator，
+因此之前编写的gateway-zuul项目已经具备路由管理的能力，不过需要在application配置文件中添加以下配置。
+management.endpoints.web.exposure.include=routes
+1.自定义指定微服务的访问路径
+
+配置zuul.routes，指定微服务的serviceId=指定路径 即可：
+
+zuul.routes.eureka-client-consumer-feign=/feign/**
+这样配置，eureka-client-consumer-feign微服务就会被映射到/feign/**路径。
+
+1.指定敏感Header
+
+一般情况下同一个系统的服务之间共享Header，不过应尽量防止让一些敏感的Header外泄。因此，在很多场景下，需要通过为路由指定一系列敏感Header列表。
+
+zuul.routes.eureka-client-consumer-feign.path=/feign/**
+zuul.routes.eureka-client-consumer-feign.sensitive-headers=Cookie,Set-Cookie,Authorization
+这样配置就可以为eureka-client-consumer-feign指定微服务访问路径和指定敏感Header
+
+也可以全局指定敏感Header：
+
+zuul.sensitive-headers=Cookie,Set-Cookie,Authorization
+2.忽略Header
+
+可以通过zuul.ignored-headers属性指定需要忽略的Header。
+
+zuul.ignored-headers=Authorization
+这样配置后Authorization将不会传播到其他的微服务中。
+
+zuul.ignored-headers的默认值为空值，但如果Spring Security在项目的classpath中，
+那么zuul.ignored-headers的默认值就是Pragma,Cache-Control,X-Frame-Options,
+X-Content-Type-Options,X-XSS-Protection,Expires。所以当Spring Security在项目的classpath中，同时又需要使用下游微服务的Spriing
+Security的Header时，可以将zuul.ignore-security-headers设置为false
+
+
+
+对于大文件（10M以上）上传，需要为上传路径添加/zuul前缀。也可以使用zuul.servlet-path自定义前缀。
+例如假如zuul.routes.eureka-client-consumer-feign-upload=/upload/**,http://localhost/{HOST}:{PORT}/upload是微服务eureka-client-consumer-feign-upload的上传路径，则需要用Zuul的/zuul/upload路径进行上传（添加/zuul前缀）。
+如果Zuul使用了Ribbon负载均衡，name对于超大文件，需要扩大超时设置：
+（Hystrix与Ribbon的默认请求超时时间都是1秒）
+hystrix.command.connect.execution.isolation.thread.timeoutInMilliseconds=60000
+ribbon.connectTimeout=3000
+ribbon.readTimeout=60000
+还需要为提供上传文件的微服务添加以下配置：
+（max-file-size默认1MB，max-request-size默认10MB）
+spring.servlet.multipart.max-file-size=2000MB
+spring.servlet.multipart.max-request-size=2500MB
+
+
+zuul默认过滤器
+
+pre	    -3	ServletDetectionFilter	标记处理Servlet的类型
+pre  	-2	Servlet30WrapperFilter	包装HttpServletRequest请求
+pre	   -1	FormBodyWrapperFilter	包装请求体
+route	1	DebugFilter	标记调试标志
+route	5	PreDecorationFilter	处理请求上下文供后续使用
+route	10	RibbonRoutingFilter	serviceId请求转发
+route	100	SimpleHostRoutingFilter	url请求转发
+route	500	SendForwardFilter	forward请求转发
+post	0	SendErrorFilter	处理有错误的请求响应
+post	1000	SendResponseFilter	处理正常的请求响应
+
+
+
+想为Zuul添加回退需要实现FallbakcProvider接口，
+指定为哪些微服务提供回退并且提供一个ClientHTTPResponse作为回退响应。
+先说明两个概念：路由配置和路由规则，路由配置是指配置某请求路径路由到指定的目的地址；路由规则是指匹配到路由配置之后，再进行自定义的规则判断，规则判断可以更改路由目的地址
+zuul默认的路由都是在properties里配置的，如果需要动态路由，需要自己实现，由上面的源码分析可以看出，实现动态路由需要实现可刷新的路由定位器接口（RefreshableRouteLocator），并可以继承默认的实现（SimpleRouteLocator）再进行扩展
+实现动态路由主要关注两个方法
+protected Map<String, ZuulRoute> locateRoutes()：此方法是加载路由配置的，父类中是获取properties中的路由配置，可以通过扩展此方法，达到动态获取配置的目的
+public Route getMatchingRoute(String path)：此方法是根据访问路径，获取匹配的路由配置，父类中已经匹配到路由，可以通过路由id查找自定义配置的路由规则，以达到根据自定义规则动态分流的效果
+为了实现针对不同存储方式的动态路由，定义抽象类实现基本的功能，代码如下
+
+
+
+
