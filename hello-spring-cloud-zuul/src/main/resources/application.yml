@@ -1,33 +1,35 @@
 spring:
   application:
     name: hello-spring-cloud-zuul
+  zipkin:
+    base-url: http://localhost:16009
+  sleuth:
+   sampler:
+    probability: 1.0
 server:
   port: 16008
 
-
-
-####手动配置zuul路由网关
 #zuul:
 # routes:
 #    hello-spring-cloud-eureka-member:
 #       path:  /**
-       ##指定路由服务地址
        ##service-id: http://localhost:16003/
 
 
-####自动读取eureeka 配置
 eureka:
   client:
     service-url:
       defaultZone: http://eurekaserver1:16000/eureka/
-####暴露端点
+
 management:
       endpoints:
          web:
             exposure:
               include: routes
-####映射
+
 zuul:
   routes:
-    hello-spring-cloud-eureka-member: /e/**
-  ###忽略映射  ignored-services:
+    hello-spring-cloud-eureka-member: /**
+    hello-spring-cloud-fengin: /**
+
+

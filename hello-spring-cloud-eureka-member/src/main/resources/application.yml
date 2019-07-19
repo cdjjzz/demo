@@ -5,5 +5,7 @@ eureka:
 spring:
   application:
     name: hello-spring-cloud-eureka-member
+  zipkin:
+    base-url: http://localhost:16009
 server:
   port: 16003
