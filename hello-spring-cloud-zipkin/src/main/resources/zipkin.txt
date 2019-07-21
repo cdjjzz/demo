@@ -1,0 +1,40 @@
+zipkin:
+  storage:
+    type: elasticsearch
+    elasticsearch:
+      hosts: http://localhost:9200
+      #      username: elastic
+      #      password: changeme
+      cluster: elasticsearch
+      index: zipkin
+      index-shards: 1
+      index-replicas: 1
+  collector:
+    kafka:
+      bootstrap-servers: localhost:9092
+      zookeeper: localhost:2181
+      topic: zipkin
+
+eureka:
+  instance:
+    lease-expiration-duration-in-seconds: 15
+    lease-renewal-interval-in-seconds: 5
+    prefer-ip-address: true
+    health-check-url-path: /actuator/health
+  client:
+    registry-fetch-interval-seconds: 5
+    service-url:
+      defaultZone: http://127.0.0.1:8761/eureka/
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: ALWAYS
+  metrics:
+    web:
+      server:
+        auto-time-requests: false

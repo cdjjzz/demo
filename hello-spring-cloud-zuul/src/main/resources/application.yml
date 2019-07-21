@@ -2,10 +2,13 @@ spring:
   application:
     name: hello-spring-cloud-zuul
   zipkin:
-    base-url: http://localhost:16009
+    base-url: http://localhost:9411/
   sleuth:
    sampler:
     probability: 1.0
+    web:
+      client:
+         enabled: true
 server:
   port: 16008
 
@@ -29,7 +32,7 @@ management:
 
 zuul:
   routes:
-    hello-spring-cloud-eureka-member: /**
-    hello-spring-cloud-fengin: /**
+    hello-spring-cloud-eureka-member: /e/**
+    hello-spring-cloud-fengin: /f/**
 
 

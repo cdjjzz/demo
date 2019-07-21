@@ -3,6 +3,9 @@ spring:
     name: hello-spring-cloud-fengin
   zipkin:
     base-url: http://localhost:16009
+  sleuth:
+    sampler:
+      probability: 1.0
 eureka:
   client:
     service-url:

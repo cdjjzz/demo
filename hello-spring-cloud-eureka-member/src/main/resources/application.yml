@@ -7,5 +7,8 @@ spring:
     name: hello-spring-cloud-eureka-member
   zipkin:
     base-url: http://localhost:16009
+  sleuth:
+    sampler:
+      probability: 1.0
 server:
-  port: 16003
+  port: 16004

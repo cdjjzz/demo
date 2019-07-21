@@ -1,8 +1,16 @@
 spring:
   application:
     name: hello-spring-cloud-zipkin
+  sleuth:
+    enabled: false
+  rabbitmq:
+    host: 192.168.1.131
+    port: 5672
+    username: guest
+    password: guest
 server:
   port: 16009
+
 eureka:
     client:
       service-url:
