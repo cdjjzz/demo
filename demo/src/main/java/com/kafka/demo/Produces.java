@@ -8,7 +8,6 @@ import java.util.Properties;
 
 public class Produces {
      public static  void main(String args[]){
-
          Properties props = new Properties();
          props.put("bootstrap.servers", "192.168.1.131:9092");//连接地址
          props.put("acks", "all");//应答模式 全部发送成功才应答
