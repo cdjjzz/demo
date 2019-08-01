@@ -7,7 +7,6 @@ import java.io.IOException;
 public class Consumer {
 
     public static void main(java.lang.String args[]) throws Exception{
-
         ConnectionFactory connectionFactory=new ConnectionFactory();
         connectionFactory.setPassword("guest");
         connectionFactory.setPassword("guest");
