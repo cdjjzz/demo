@@ -1,13 +1,12 @@
 package com.kafka.demo;
 
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.*;
 
 import java.util.Properties;
+import java.util.concurrent.Future;
 
 public class Produces {
-     public static  void main(String args[]){
+     public static  void main(String args[]) throws  Exception{
          System.out.println("pb");
          Properties props = new Properties();
          props.put("bootstrap.servers", "192.168.1.131:9092");//连接地址
@@ -20,10 +19,29 @@ public class Produces {
          props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
 
          Producer<String, String> producer = new KafkaProducer<String,String>(props);
+        //同步发送
          for(int i = 0; i < 100; i++) {
+             //kafka 封装ProducerRecord，发送到broker
              //send 异步方法，返回future ,设置回调方法，或者直接调用get()将阻塞执行
-             producer.send(new ProducerRecord<String, String>("test",
+             //不使用键值对，值有主题和值，默认是轮训消息发送到每一个分区
+             Future<RecordMetadata> recordMetadata=
+                     producer.send(new ProducerRecord<String, String>("test",
                      Integer.toString(i), Integer.toString(i)));
+             //使用键值对，同一键值对的消息只会发送到一个分区
+             producer.send(new ProducerRecord<>("test", "111", Integer.toString(i)));
+             RecordMetadata record=recordMetadata.get();
+             System.out.println(record.topic());
+         }
+         for (int i = 100; i <200 ; i++) {
+             Future<RecordMetadata> recordMetadata= producer
+                     .send(new ProducerRecord<>("test11", Integer.toString(i)), new Callback() {
+                 @Override
+                 public void onCompletion(RecordMetadata recordMetadata, Exception e) {
+                     System.out.println(recordMetadata.partition()+"--------");
+                 }
+             });
+             RecordMetadata record=recordMetadata.get();
+             System.out.println(record.partition()+"22222222222");
          }
          producer.close();
      }
